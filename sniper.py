@@ -55,11 +55,13 @@ def authenticate(session, id_number, forenames, surname, contact_number, email="
 
     # Authenticate
     resp = session.post(f"{API}/authenticatedetails/", json={
-        "id_number": id_number,
+        "identification_type": 1,
+        "identification_val": id_number,
         "forenames": forenames,
         "surname": surname,
         "contact_number": contact_number,
-        "email": email
+        "email": email,
+        "country_of_issue": ""
     }, timeout=30)
     d = resp.json()
     if not d["ResultSuccess"]:
