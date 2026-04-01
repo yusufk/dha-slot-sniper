@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DHA Slot Sniper</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#f5f5f5;color:#333;max-width:600px;margin:0 auto;padding:16px}
+h1{color:#016635;margin-bottom:4px;font-size:1.5em}
+.subtitle{color:#666;margin-bottom:16px;font-size:.9em}
+label{display:block;font-weight:600;margin:8px 0 4px;font-size:.9em}
+input,select{width:100%;padding:10px;border:1px solid #ccc;border-radius:6px;font-size:1em}
+button{width:100%;padding:12px;border:none;border-radius:6px;font-size:1em;font-weight:600;cursor:pointer;margin-top:12px}
+.btn-primary{background:#016635;color:#fff}
+.btn-primary:hover{background:#014d28}
+.btn-primary:disabled{background:#999;cursor:not-allowed}
+.btn-danger{background:#ea2127;color:#fff}
+.btn-danger:hover{background:#c01}
+#log{background:#1a1a2e;color:#0f0;font-family:monospace;font-size:.85em;padding:12px;border-radius:6px;margin-top:12px;height:250px;overflow-y:auto;white-space:pre-wrap}
+.slot{background:#fff;border:2px solid #016635;border-radius:8px;padding:12px;margin:8px 0;cursor:pointer}
+.slot:hover{background:#e8f5e9}
+.slot .date{font-weight:700;color:#016635}
+.hidden{display:none}
+.status{padding:8px;border-radius:6px;margin:8px 0;font-weight:600;text-align:center}
+.status.ok{background:#e8f5e9;color:#016635}
+.status.err{background:#fce4ec;color:#c01}
+.status.warn{background:#fff3e0;color:#e65100}
+a{color:#016635}
+.coffee{text-align:center;margin-top:16px;font-size:.85em}
+</style>
+</head>
+<body>
+
+<h1>🎯 DHA Slot Sniper</h1>
+<p class="subtitle">Find and book Home Affairs appointments automatically</p>
+
+<div id="setup">
+  <label>ID Number (13 digits)</label>
+  <input id="idNum" type="text" maxlength="13" placeholder="e.g. 7801015009087">
+
+  <label>Forenames (as on ID)</label>
+  <input id="name" type="text" placeholder="e.g. JOHN">
+
+  <label>Surname</label>
+  <input id="surname" type="text" placeholder="e.g. DOE">
+
+  <label>Phone Number</label>
+  <input id="phone" type="text" placeholder="e.g. 0821234567">
+
+  <label>City</label>
+  <select id="city"><option value="">Loading...</option></select>
+
+  <label><input type="checkbox" id="autoBook" checked> Auto-book first available slot</label>
+
+  <button class="btn-primary" id="startBtn" onclick="start()">🔍 Start Searching</button>
+</div>
+
+<div id="running" class="hidden">
+  <div id="statusBar" class="status ok">Searching...</div>
+  <button class="btn-danger" onclick="stop()">⏹ Stop</button>
+  <div id="slots"></div>
+</div>
+
+<div id="log"></div>
+
+<div class="coffee">
+  <a href="https://buymeacoffee.com/yusufk" target="_blank">☕ Buy me a coffee</a> |
+  <a href="https://github.com/yusufk/dha-slot-sniper" target="_blank">GitHub</a>
+</div>
+
+<script>
+// UPDATE THIS after deploying the Cloudflare Worker
+const PROXY = "https://dha-slot-sniper.yusufk.workers.dev";
+const PRODUCT = "IDs / Travel Documents";
+
+let polling = false, timer = null, cookie = "", branches = {};
+
+async function api(method, path, body) {
+  const opts = { method, headers: {"Content-Type":"application/json"} };
+  if (cookie) opts.headers["X-DHA-Cookie"] = cookie;
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(`${PROXY}/${path}`, opts);
+  const sc = r.headers.get("X-DHA-Set-Cookie");
+  if (sc) cookie = sc.split(";")[0];
+  return r.json();
+}
+
+function log(msg) {
+  const el = document.getElementById("log");
+  const ts = new Date().toLocaleTimeString();
+  el.textContent += `[${ts}] ${msg}\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+async function loadBranches() {
+  try {
+    const d = await api("GET", "getbranchdetails/");
+    if (!d.ResultSuccess) return;
+    const all = JSON.parse(d.Payload);
+    const cities = {};
+    all.forEach(b => {
+      const c = b.City;
+      if (!cities[c]) cities[c] = [];
+      cities[c].push(b);
+      branches[b.ID] = b.Descr;
+    });
+    const sel = document.getElementById("city");
+    sel.innerHTML = '<option value="">-- Select City --</option>';
+    Object.keys(cities).sort().forEach(c => {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = `${c} (${cities[c].length} branches)`;
+      opt.dataset.codes = JSON.stringify(cities[c].map(b => b.ID));
+      sel.appendChild(opt);
+    });
+  } catch(e) { log("Failed to load branches: " + e.message); }
+}
+
+async function authenticate() {
+  const d = await api("POST", "authenticatedetails/", {
+    identification_type: 1,
+    identification_val: document.getElementById("idNum").value,
+    forenames: document.getElementById("name").value.toUpperCase(),
+    surname: document.getElementById("surname").value.toUpperCase(),
+    contact_number: document.getElementById("phone").value,
+    email: "",
+    country_of_issue: ""
+  });
+  return d.ResultSuccess && d.Payload?.authenticated;
+}
+
+async function checkSlots(codes) {
+  const id = document.getElementById("idNum").value;
+  const now = new Date();
+  for (const code of codes) {
+    for (let off = 0; off < 28; off += 4) {
+      const start = new Date(now); start.setDate(start.getDate() + 1 + off);
+      const end = new Date(start); end.setDate(end.getDate() + 4);
+      const fmt = d => `${String(d.getDate()).padStart(2,"0")}-${String(d.getMonth()+1).padStart(2,"0")}-${d.getFullYear()}`;
+      try {
+        const d = await api("POST", "gettimeslotdetails/", {
+          branch_code: code, date_from: fmt(start), date_to: fmt(end),
+          applicants: [{identity_value: id, identity_type: "ID", products: [PRODUCT]}]
+        });
+        if (d.ResultSuccess) {
+          let slots = d.Payload || [];
+          if (typeof slots === "string") slots = JSON.parse(slots);
+          const avail = slots.filter(s => s.SlotAvailable);
+          if (avail.length) return {branch: branches[code] || code, code, slots: avail};
+        }
+      } catch(e) { continue; }
+    }
+  }
+  return null;
+}
+
+async function bookSlot(code, slot) {
+  const id = document.getElementById("idNum").value;
+  const name = document.getElementById("name").value.toUpperCase();
+  const surname = document.getElementById("surname").value.toUpperCase();
+  for (const ps of [
+    [{product:PRODUCT,service:"Passport Application"}],
+    [{product:"",service:"Passport Application"}],
+    []
+  ]) {
+    const d = await api("POST", "captureappointment/", {
+      branch_code: code, time_slot_id: slot.TimeSlotID,
+      appointment_date: slot.Date, accepted_declaration: true,
+      appointment_request: JSON.stringify([{
+        identityValue:id, identityType:"ID", productsAndServices:ps,
+        forenames:name, surname:surname, country:"ZAF"
+      }])
+    });
+    if (d.ResultSuccess) return d;
+  }
+  return {ResultSuccess: false, AppInfo: {description: "All booking attempts failed"}};
+}
+
+async function start() {
+  const sel = document.getElementById("city");
+  const opt = sel.selectedOptions[0];
+  if (!opt?.dataset?.codes) return alert("Select a city");
+  if (!document.getElementById("idNum").value) return alert("Enter ID number");
+  if (!document.getElementById("name").value) return alert("Enter forenames");
+  if (!document.getElementById("surname").value) return alert("Enter surname");
+
+  const codes = JSON.parse(opt.dataset.codes);
+  document.getElementById("setup").classList.add("hidden");
+  document.getElementById("running").classList.remove("hidden");
+
+  log("Authenticating...");
+  const auth = await authenticate();
+  if (!auth) { log("❌ Authentication failed"); setStatus("Authentication failed","err"); stop(); return; }
+  log("✅ Authenticated");
+
+  polling = true;
+  log(`🔍 Checking ${codes.length} branches every 5 min...`);
+
+  async function poll() {
+    if (!polling) return;
+    setStatus("Checking...","ok");
+    const result = await checkSlots(codes);
+    if (result) {
+      log(`🚨 ${result.slots.length} slot(s) at ${result.branch}!`);
+      const s = result.slots[0];
+      log(`   ${s.Date} ${s.StartTime}-${s.EndTime}`);
+      setStatus(`🚨 SLOTS at ${result.branch}!`,"warn");
+
+      if (document.getElementById("autoBook").checked) {
+        log("Auto-booking...");
+        const r = await bookSlot(result.code, s);
+        if (r.ResultSuccess) {
+          const ref = r.Payload?.ReferenceNo || "?";
+          log(`✅ BOOKED! Ref: ${ref}`);
+          setStatus(`✅ BOOKED! Ref: ${ref}`,"ok");
+          polling = false; return;
+        } else {
+          log(`⚠️ Booking failed: ${r.AppInfo?.description}`);
+        }
+      } else {
+        showSlots(result);
+      }
+    } else {
+      log("No slots");
+      setStatus("No slots — checking again in 5 min","ok");
+    }
+    if (polling) timer = setTimeout(poll, 300000);
+  }
+  poll();
+}
+
+function stop() {
+  polling = false;
+  clearTimeout(timer);
+  document.getElementById("setup").classList.remove("hidden");
+  document.getElementById("running").classList.add("hidden");
+  log("Stopped");
+}
+
+function setStatus(msg, cls) {
+  const el = document.getElementById("statusBar");
+  el.textContent = msg;
+  el.className = "status " + cls;
+}
+
+function showSlots(result) {
+  const el = document.getElementById("slots");
+  el.innerHTML = result.slots.slice(0,5).map(s =>
+    `<div class="slot" onclick="manualBook('${result.code}',${s.TimeSlotID},'${s.Date}','${s.StartTime}','${s.EndTime}')">
+      <div class="date">${result.branch} — ${s.Date}</div>
+      <div>${s.StartTime} - ${s.EndTime}</div>
+      <div style="font-size:.8em;color:#666">Click to book</div>
+    </div>`
+  ).join("");
+}
+
+async function manualBook(code, slotId, date, start, end) {
+  log(`Booking ${date} ${start}...`);
+  const r = await bookSlot(code, {TimeSlotID:slotId, Date:date});
+  if (r.ResultSuccess) {
+    log(`✅ BOOKED! Ref: ${r.Payload?.ReferenceNo}`);
+    setStatus(`✅ BOOKED! Ref: ${r.Payload?.ReferenceNo}`,"ok");
+    polling = false;
+  } else {
+    log(`⚠️ Failed: ${r.AppInfo?.description}`);
+  }
+}
+
+loadBranches();
+</script>
+</body>
+</html>
