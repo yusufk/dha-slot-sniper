@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.env
+config.json
+dha_*_session.json
+*.png
