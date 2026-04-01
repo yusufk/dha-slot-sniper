@@ -3,10 +3,16 @@
 // Or paste into Cloudflare Dashboard > Workers > Quick Edit
 
 const DHA_API = "https://services.dha.gov.za/api/booking";
-const ALLOWED_ORIGINS = ["*"]; // Lock down to your domain in production
+const ALLOWED_ORIGINS = ["https://yusuf.kaka.co.za", "https://yusufk.github.io", "http://localhost"];
 
 export default {
   async fetch(request) {
+    // Only allow requests from your domains
+    const origin = request.headers.get("Origin") || "";
+    if (!ALLOWED_ORIGINS.some(o => origin.startsWith(o))) {
+      return new Response("Forbidden", { status: 403 });
+    }
+
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders(request) });
     }
