@@ -34,7 +34,8 @@ python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --phone 082123456
 --surname       Surname as on ID [required]
 --phone         Contact number
 --email         Email address
---branches      Comma-separated branch codes (default: CSC,YHH,YCX)
+--branches      Comma-separated branch codes (e.g. CSC,YHH) — overrides --city
+--city          City to search (e.g. JOHANNESBURG, CAPE TOWN, PRETORIA)
 --interval      Seconds between checks (default: 300 = 5 min)
 --check-only    Only check for slots, don't auto-book
 --list-branches List all available branches
@@ -51,8 +52,15 @@ python3 sniper.py --list-branches
 This shows all DHA branches with their codes. Use the codes with `--branches`:
 
 ```bash
-# Check Cresta, Randburg, and Cape Town
-python3 sniper.py --id ... --name ... --surname ... --branches CSC,YHH,CPT
+# Check Johannesburg area (default)
+python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --phone 0821234567
+
+# Check by city name — auto-selects all branches in that city
+python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --city "CAPE TOWN"
+python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --city PRETORIA
+
+# Check specific branches
+python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --branches CSC,YHH
 ```
 
 ## Tips

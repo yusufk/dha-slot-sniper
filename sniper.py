@@ -187,8 +187,10 @@ Tips:
     parser.add_argument("--surname", help="Surname (as on ID)")
     parser.add_argument("--phone", default="", help="Contact number")
     parser.add_argument("--email", default="", help="Email address")
-    parser.add_argument("--branches", default="CSC,YHH,YCX",
-                        help="Comma-separated branch codes to check (default: CSC,YHH,YCX)")
+    parser.add_argument("--branches", default="",
+                        help="Comma-separated branch codes (e.g. CSC,YHH). If not set, auto-selects from --city")
+    parser.add_argument("--city", default="",
+                        help="City to search (e.g. JOHANNESBURG, CAPE TOWN, PRETORIA). Auto-selects all branches in that city")
     parser.add_argument("--interval", type=int, default=300,
                         help="Seconds between checks (default: 300 = 5 min)")
     parser.add_argument("--check-only", action="store_true",
@@ -208,15 +210,25 @@ Tips:
     if not args.id or not args.name or not args.surname:
         parser.error("--id, --name, and --surname are required")
 
-    # Parse branches
-    branch_codes = [b.strip() for b in args.branches.split(",")]
-    branches = {code: code for code in branch_codes}
-
-    # Try to get friendly names
+    # Resolve branches
     all_branches = get_branches(session)
-    if all_branches:
-        branch_map = {b["ID"]: b["Descr"] for b in all_branches}
-        branches = {code: branch_map.get(code, code) for code in branch_codes}
+    branch_map = {b["ID"]: b for b in all_branches} if all_branches else {}
+
+    if args.branches:
+        branch_codes = [b.strip() for b in args.branches.split(",")]
+        branches = {code: branch_map.get(code, {}).get("Descr", code) for code in branch_codes}
+    elif args.city:
+        city_upper = args.city.upper()
+        branches = {}
+        for b in all_branches:
+            if city_upper in b.get("City", "").upper() or city_upper in b.get("Descr", "").upper() or city_upper in b.get("Province", "").upper():
+                branches[b["ID"]] = b["Descr"]
+        if not branches:
+            print(f"❌ No branches found matching '{args.city}'. Use --list-branches to see all options.")
+            sys.exit(1)
+    else:
+        # Default: Johannesburg area
+        branches = {"CSC": "Cresta", "YHH": "Randburg", "YCX": "Roodepoort"}
 
     print(f"🎯 DHA Slot Sniper")
     print(f"   Checking: {', '.join(f'{v} ({k})' for k, v in branches.items())}")
