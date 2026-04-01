@@ -9,7 +9,7 @@ Built out of frustration with the broken ehome.dha.gov.za booking system. This t
 ## How It Works
 
 1. Authenticates with the DHA services API using your ID number
-2. Polls multiple branches every 60 seconds using short date ranges (4-day windows)
+2. Polls multiple branches every 5 minutes using short date ranges (4-day windows)
 3. When a slot appears, auto-books it immediately
 4. Sends you a Telegram notification (optional)
 
