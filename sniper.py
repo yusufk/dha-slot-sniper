@@ -115,22 +115,30 @@ def check_slots(session, branches, id_number):
 
 
 def book_slot(session, code, slot, id_number, forenames, surname):
-    """Book a specific slot."""
-    resp = session.post(f"{API}/captureappointment/", json={
-        "branch_code": code,
-        "time_slot_id": slot["TimeSlotID"],
-        "appointment_date": slot["Date"],
-        "accepted_declaration": True,
-        "appointment_request": json.dumps([{
-            "identityValue": id_number,
-            "identityType": "ID",
-            "productsAndServices": [{"product": PRODUCT, "service": "Passport Application"}],
-            "forenames": forenames,
-            "surname": surname,
-            "country": "ZAF"
-        }])
-    }, timeout=30)
-    return resp.json()
+    """Book a specific slot. Tries with product first, falls back to empty."""
+    for products_and_services in [
+        [{"product": PRODUCT, "service": "Passport Application"}],
+        [{"product": "", "service": "Passport Application"}],
+        [],
+    ]:
+        resp = session.post(f"{API}/captureappointment/", json={
+            "branch_code": code,
+            "time_slot_id": slot["TimeSlotID"],
+            "appointment_date": slot["Date"],
+            "accepted_declaration": True,
+            "appointment_request": json.dumps([{
+                "identityValue": id_number,
+                "identityType": "ID",
+                "productsAndServices": products_and_services,
+                "forenames": forenames,
+                "surname": surname,
+                "country": "ZAF"
+            }])
+        }, timeout=30)
+        result = resp.json()
+        if result["ResultSuccess"]:
+            return result
+    return result
 
 
 def list_branches(session):
@@ -179,8 +187,8 @@ Tips:
     parser.add_argument("--email", default="", help="Email address")
     parser.add_argument("--branches", default="CSC,YHH,YCX",
                         help="Comma-separated branch codes to check (default: CSC,YHH,YCX)")
-    parser.add_argument("--interval", type=int, default=60,
-                        help="Seconds between checks (default: 60)")
+    parser.add_argument("--interval", type=int, default=300,
+                        help="Seconds between checks (default: 300 = 5 min)")
     parser.add_argument("--check-only", action="store_true",
                         help="Only check for slots, don't book")
     parser.add_argument("--list-branches", action="store_true",

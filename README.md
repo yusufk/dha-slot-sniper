@@ -35,7 +35,7 @@ python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --phone 082123456
 --phone         Contact number
 --email         Email address
 --branches      Comma-separated branch codes (default: CSC,YHH,YCX)
---interval      Seconds between checks (default: 60)
+--interval      Seconds between checks (default: 300 = 5 min)
 --check-only    Only check for slots, don't auto-book
 --list-branches List all available branches
 --telegram-token  Telegram bot token for mobile alerts
