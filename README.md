@@ -36,12 +36,33 @@ python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --phone 082123456
 --email         Email address
 --branches      Comma-separated branch codes (e.g. CSC,YHH) — overrides --city
 --city          City to search (e.g. JOHANNESBURG, CAPE TOWN, PRETORIA)
+--service       Service type (default: passport). See below for options.
 --interval      Seconds between checks (default: 300 = 5 min)
 --check-only    Only check for slots, don't auto-book
 --list-branches List all available branches
 --telegram-token  Telegram bot token for mobile alerts
 --telegram-chat   Telegram chat ID for alerts
 ```
+
+## Service Types
+
+| Flag | Service |
+|------|---------|
+| `passport` | Passport Application (default) |
+| `id` | ID Card Application |
+| `birth-reissue` | Birth Certificate Reissue |
+| `marriage-reissue` | Marriage Certificate Reissue |
+| `death-reissue` | Death Certificate Reissue |
+| `birth-reg` | Registration of Birth |
+| `marriage-reg` | Registration of Marriage |
+| `death-reg` | Registration of Death |
+| `amendment` | Amendment |
+| `collection` | Collection |
+| `payment` | Payment |
+| `epermit` | ePermit |
+| `enquiry` | Enquiry |
+
+Service types sourced from the DHA API (`/servicetypeslist/`).
 
 ## List Available Branches
 
@@ -52,12 +73,17 @@ python3 sniper.py --list-branches
 This shows all DHA branches with their codes. Use the codes with `--branches`:
 
 ```bash
-# Check Johannesburg area (default)
-python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --phone 0821234567
+# Passport (default)
+python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --city JOHANNESBURG
+
+# ID Card Application
+python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --city JOHANNESBURG --service id
+
+# Collection
+python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --city PRETORIA --service collection
 
 # Check by city name — auto-selects all branches in that city
 python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --city "CAPE TOWN"
-python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --city PRETORIA
 
 # Check specific branches
 python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --branches CSC,YHH
@@ -68,6 +94,16 @@ python3 sniper.py --id 7801015009087 --name JOHN --surname DOE --branches CSC,YH
 - **Run overnight** — slots appear to drop around midnight and early morning (6-8am SAST)
 - **Short date ranges** — the tool automatically uses 4-day windows which work better than full month queries
 - **Multiple branches** — check several nearby branches to maximize your chances
+
+## Web Interface
+
+A browser-based version is available at **https://yusuf.kaka.co.za/dha-slot-sniper/**
+
+Features:
+- City and service type dropdowns
+- Auto-poll every 5 minutes
+- Optional auto-book (disabled by default)
+- Uses a Cloudflare Worker proxy to handle CORS
 - **Telegram alerts** — set up a bot via [@BotFather](https://t.me/BotFather) so you get notified on your phone
 
 ## Telegram Setup (Optional)
