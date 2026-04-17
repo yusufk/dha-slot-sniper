@@ -16,11 +16,23 @@ from datetime import datetime, timedelta
 
 API = "https://services.dha.gov.za/api/booking"
 
+# Service types from /servicetypeslist/ API
 SERVICES = {
-    "passport":      {"product": "IDs / Travel Documents", "service": "Passport Application"},
-    "id":            {"product": "IDs / Travel Documents", "service": "ID Application"},
-    "id-collection": {"product": "IDs / Travel Documents", "service": "ID Collection"},
+    "id":                {"id": 1,  "name": "ID Card Application"},
+    "passport":          {"id": 2,  "name": "Passport Application"},
+    "birth-reissue":     {"id": 3,  "name": "Birth Certificate Reissue"},
+    "marriage-reissue":  {"id": 4,  "name": "Marriage Certificate Reissue"},
+    "death-reissue":     {"id": 5,  "name": "Death Certificate Reissue"},
+    "birth-reg":         {"id": 6,  "name": "Registration of Birth"},
+    "marriage-reg":      {"id": 7,  "name": "Registration of Marriage"},
+    "death-reg":         {"id": 8,  "name": "Registration of Death"},
+    "amendment":         {"id": 9,  "name": "Amendment"},
+    "collection":        {"id": 15, "name": "Collection"},
+    "payment":           {"id": 16, "name": "Payment"},
+    "epermit":           {"id": 25, "name": "ePermit"},
+    "enquiry":           {"id": 26, "name": "Enquiry"},
 }
+PRODUCT = "IDs / Travel Documents"
 DEFAULT_SERVICE = "passport"
 
 # All branches — add/remove as needed
@@ -106,7 +118,7 @@ def check_slots(session, branches, id_number, svc):
                     "applicants": [{
                         "identity_value": id_number,
                         "identity_type": "ID",
-                        "products": [svc["product"]]
+                        "products": [PRODUCT]
                     }]
                 }, timeout=30)
                 d = resp.json()
@@ -125,8 +137,8 @@ def check_slots(session, branches, id_number, svc):
 def book_slot(session, code, slot, id_number, forenames, surname, svc):
     """Book a specific slot. Tries with product first, falls back to empty."""
     for products_and_services in [
-        [{"product": svc["product"], "service": svc["service"]}],
-        [{"product": "", "service": svc["service"]}],
+        [{"product": PRODUCT, "service": svc["name"]}],
+        [{"product": "", "service": svc["name"]}],
         [],
     ]:
         resp = session.post(f"{API}/captureappointment/", json={

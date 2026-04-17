@@ -52,11 +52,7 @@ a{color:#016635}
   <select id="city"><option value="">Loading...</option></select>
 
   <label>Service Type</label>
-  <select id="serviceType">
-    <option value="passport" selected>Passport Application</option>
-    <option value="id">ID Application</option>
-    <option value="id-collection">ID Collection</option>
-  </select>
+  <select id="serviceType"></select>
 
   <label><input type="checkbox" id="autoBook"> Auto-book first available slot</label>
 
@@ -80,9 +76,19 @@ a{color:#016635}
 // UPDATE THIS after deploying the Cloudflare Worker
 const PROXY = "https://dha-slot-sniper.yusufk.workers.dev";
 const SERVICES = {
-  passport:      {product: "IDs / Travel Documents", service: "Passport Application"},
-  id:            {product: "IDs / Travel Documents", service: "ID Application"},
-  "id-collection": {product: "IDs / Travel Documents", service: "ID Collection"},
+  id:               {id:1,  name:"ID Card Application"},
+  passport:         {id:2,  name:"Passport Application"},
+  "birth-reissue":  {id:3,  name:"Birth Certificate Reissue"},
+  "marriage-reissue":{id:4, name:"Marriage Certificate Reissue"},
+  "death-reissue":  {id:5,  name:"Death Certificate Reissue"},
+  "birth-reg":      {id:6,  name:"Registration of Birth"},
+  "marriage-reg":   {id:7,  name:"Registration of Marriage"},
+  "death-reg":      {id:8,  name:"Registration of Death"},
+  amendment:        {id:9,  name:"Amendment"},
+  collection:       {id:15, name:"Collection"},
+  payment:          {id:16, name:"Payment"},
+  epermit:          {id:25, name:"ePermit"},
+  enquiry:          {id:26, name:"Enquiry"},
 };
 let svc = SERVICES.passport;
 
@@ -153,7 +159,7 @@ async function checkSlots(codes) {
       try {
         const d = await api("POST", "gettimeslotdetails/", {
           branch_code: code, date_from: fmt(start), date_to: fmt(end),
-          applicants: [{identity_value: id, identity_type: "ID", products: [svc.product]}]
+          applicants: [{identity_value: id, identity_type: "ID", products: ["IDs / Travel Documents"]}]
         });
         if (d.ResultSuccess) {
           let slots = d.Payload || [];
@@ -172,8 +178,8 @@ async function bookSlot(code, slot) {
   const name = document.getElementById("name").value.toUpperCase();
   const surname = document.getElementById("surname").value.toUpperCase();
   for (const ps of [
-    [{product:svc.product,service:svc.service}],
-    [{product:"",service:svc.service}],
+    [{product:"IDs / Travel Documents",service:svc.name}],
+    [{product:"",service:svc.name}],
     []
   ]) {
     const d = await api("POST", "captureappointment/", {
@@ -281,6 +287,14 @@ async function manualBook(code, slotId, date, start, end) {
 }
 
 loadBranches();
+// Populate service type dropdown
+const stSel = document.getElementById("serviceType");
+Object.entries(SERVICES).forEach(([k,v]) => {
+  const o = document.createElement("option");
+  o.value = k; o.textContent = v.name;
+  if (k === "passport") o.selected = true;
+  stSel.appendChild(o);
+});
 </script>
 </body>
 </html>
