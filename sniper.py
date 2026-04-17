@@ -15,7 +15,13 @@ import requests
 from datetime import datetime, timedelta
 
 API = "https://services.dha.gov.za/api/booking"
-PRODUCT = "IDs / Travel Documents"
+
+SERVICES = {
+    "passport":      {"product": "IDs / Travel Documents", "service": "Passport Application"},
+    "id":            {"product": "IDs / Travel Documents", "service": "ID Application"},
+    "id-collection": {"product": "IDs / Travel Documents", "service": "ID Collection"},
+}
+DEFAULT_SERVICE = "passport"
 
 # All branches — add/remove as needed
 DEFAULT_BRANCHES = {
@@ -85,7 +91,7 @@ def get_branches(session):
     return []
 
 
-def check_slots(session, branches, id_number):
+def check_slots(session, branches, id_number, svc):
     """Check all branches with short date ranges for available slots."""
     today = datetime.now()
     for code, name in branches.items():
@@ -100,7 +106,7 @@ def check_slots(session, branches, id_number):
                     "applicants": [{
                         "identity_value": id_number,
                         "identity_type": "ID",
-                        "products": [PRODUCT]
+                        "products": [svc["product"]]
                     }]
                 }, timeout=30)
                 d = resp.json()
@@ -116,11 +122,11 @@ def check_slots(session, branches, id_number):
     return None, None, []
 
 
-def book_slot(session, code, slot, id_number, forenames, surname):
+def book_slot(session, code, slot, id_number, forenames, surname, svc):
     """Book a specific slot. Tries with product first, falls back to empty."""
     for products_and_services in [
-        [{"product": PRODUCT, "service": "Passport Application"}],
-        [{"product": "", "service": "Passport Application"}],
+        [{"product": svc["product"], "service": svc["service"]}],
+        [{"product": "", "service": svc["service"]}],
         [],
     ]:
         resp = session.post(f"{API}/captureappointment/", json={
@@ -193,6 +199,8 @@ Tips:
                         help="City to search (e.g. JOHANNESBURG, CAPE TOWN, PRETORIA). Auto-selects all branches in that city")
     parser.add_argument("--interval", type=int, default=300,
                         help="Seconds between checks (default: 300 = 5 min)")
+    parser.add_argument("--service", default=DEFAULT_SERVICE, choices=SERVICES.keys(),
+                        help=f"Service type (default: {DEFAULT_SERVICE}). Options: {', '.join(SERVICES.keys())}")
     parser.add_argument("--check-only", action="store_true",
                         help="Only check for slots, don't book")
     parser.add_argument("--list-branches", action="store_true",
@@ -230,7 +238,10 @@ Tips:
         # Default: Johannesburg area
         branches = {"CSC": "Cresta", "YHH": "Randburg", "YCX": "Roodepoort"}
 
+    svc = SERVICES[args.service]
+
     print(f"🎯 DHA Slot Sniper")
+    print(f"   Service: {svc['service']}")
     print(f"   Checking: {', '.join(f'{v} ({k})' for k, v in branches.items())}")
     print(f"   Interval: {args.interval}s")
     print(f"   Mode: {'Check only' if args.check_only else 'Auto-book'}")
@@ -247,7 +258,7 @@ Tips:
 
     while True:
         ts = time.strftime("%H:%M:%S")
-        name, code, avail = check_slots(session, branches, args.id)
+        name, code, avail = check_slots(session, branches, args.id, svc)
 
         if avail:
             slot = avail[0]
@@ -259,7 +270,7 @@ Tips:
                 print(f"        (check-only mode — not booking)")
             else:
                 tg(f"🚨 {len(avail)} DHA slots at {name}! Auto-booking...")
-                result = book_slot(session, code, slot, args.id, args.name, args.surname)
+                result = book_slot(session, code, slot, args.id, args.name, args.surname, svc)
 
                 if result["ResultSuccess"]:
                     ref = result["Payload"].get("ReferenceNo", "?")
